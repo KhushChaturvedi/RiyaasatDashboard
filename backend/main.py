@@ -10,7 +10,10 @@ app = FastAPI(title="Riyaasat Dashboard API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:4173"],
+    allow_origins=["http://localhost:5173",
+    "http://localhost:3000",
+    "https://riyaasat-dashboard.vercel.app",
+    "https://*.vercel.app",],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
