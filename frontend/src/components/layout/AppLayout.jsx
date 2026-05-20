@@ -1,7 +1,7 @@
+import { useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import Sidebar from './Sidebar'
-import BottomNav from './BottomNav'
 import TopBar from './TopBar'
 import { useRealtime } from '../../hooks/useRealtime'
 
@@ -25,6 +25,7 @@ const pageVariants = {
 export default function AppLayout() {
   const location = useLocation()
   const title = PAGE_TITLES[location.pathname] || 'Riyaasat'
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   useRealtime()
 
   return (
@@ -36,7 +37,26 @@ export default function AppLayout() {
       overflow: 'hidden',
       background: 'var(--bg-base)',
     }}>
-      <Sidebar />
+      {/* Mobile backdrop */}
+      <AnimatePresence>
+        {mobileSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setMobileSidebarOpen(false)}
+            className="md:hidden"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 99,
+              background: 'rgba(0,0,0,0.5)',
+            }}
+          />
+        )}
+      </AnimatePresence>
+      <Sidebar mobileOpen={mobileSidebarOpen} onMobileClose={() => setMobileSidebarOpen(false)} />
       <div style={{
         flex: 1,
         display: 'flex',
@@ -44,15 +64,13 @@ export default function AppLayout() {
         minWidth: 0,
         overflow: 'hidden',
       }}>
-        <TopBar title={title} />
+        <TopBar title={title} onMenuClick={() => setMobileSidebarOpen(true)} />
         <main style={{
           flex: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
           minHeight: 0,
-        }}
-          className="md:pb-0"
-        >
+        }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -61,15 +79,13 @@ export default function AppLayout() {
               animate="animate"
               exit="exit"
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              style={{ minHeight: '100%', paddingBottom: 'env(safe-area-inset-bottom, 80px)' }}
-              className="md:pb-0"
+              style={{ minHeight: '100%' }}
             >
               <Outlet />
             </motion.div>
           </AnimatePresence>
         </main>
       </div>
-      <BottomNav />
     </div>
   )
 }

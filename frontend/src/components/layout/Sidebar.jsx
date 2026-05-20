@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Tag, Users, Shirt, Layers, Database, Settings,
-  ChevronLeft, ChevronRight, UserCheck,
+  ChevronLeft, ChevronRight, UserCheck, X,
 } from 'lucide-react'
 import useAppStore from '../../store/useAppStore'
 
@@ -17,172 +17,261 @@ const navItems = [
   { to: '/settings', icon: Settings, label: 'Settings', id: 'nav-settings' },
 ]
 
-export default function Sidebar() {
+function NavItems({ collapsed, onItemClick }) {
+  return navItems.map(({ to, icon: Icon, label, id }) => (
+    <NavLink
+      key={to}
+      to={to}
+      id={id}
+      title={collapsed ? label : undefined}
+      onClick={onItemClick}
+      style={({ isActive }) => ({
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        height: 40,
+        padding: '0 12px',
+        borderRadius: 8,
+        textDecoration: 'none',
+        fontSize: 13,
+        fontWeight: 500,
+        transition: 'background 0.15s ease, color 0.15s ease',
+        boxShadow: isActive ? 'inset 3px 0 0 var(--accent)' : 'none',
+        background: isActive ? 'var(--accent-glow)' : 'transparent',
+        color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+      })}
+      onMouseEnter={(e) => {
+        if (!e.currentTarget.classList.contains('active')) {
+          e.currentTarget.style.background = 'var(--bg-card-hover)'
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!e.currentTarget.getAttribute('aria-current')) {
+          e.currentTarget.style.background = e.currentTarget.style.background.includes('accent')
+            ? 'var(--accent-glow)' : 'transparent'
+        }
+      }}
+    >
+      <Icon size={18} style={{ flexShrink: 0 }} />
+      <AnimatePresence>
+        {!collapsed && (
+          <motion.span
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: 'auto' }}
+            exit={{ opacity: 0, width: 0 }}
+            transition={{ duration: 0.15 }}
+            style={{ overflow: 'hidden' }}
+          >
+            {label}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </NavLink>
+  ))
+}
+
+export default function Sidebar({ mobileOpen, onMobileClose }) {
   const collapsed = useAppStore((s) => s.sidebarCollapsed)
   const setCollapsed = useAppStore((s) => s.setSidebarCollapsed)
   const theme = useAppStore((s) => s.theme)
   const isDark = ['dark', 'navy', 'red', 'green', 'grey'].includes(theme)
 
-  return (
-    <motion.aside
-      animate={{ width: collapsed ? 64 : 220 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="hidden md:flex flex-col shrink-0 h-screen sticky top-0 overflow-hidden"
+  const logoImg = (
+    <img
+      src="/riyaasat-logo.svg"
+      alt="Riyaasat"
       style={{
-        background: 'var(--bg-surface)',
-        borderRight: '1px solid var(--border)',
+        height: 36,
+        width: 'auto',
+        objectFit: 'contain',
+        display: 'block',
+        filter: isDark ? 'brightness(0) invert(1)' : 'none',
       }}
-    >
-      {/* Logo area */}
-      <div
+    />
+  )
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <motion.aside
+        animate={{ width: collapsed ? 64 : 220 }}
+        transition={{ duration: 0.2, ease: 'easeInOut' }}
+        className="hidden md:flex flex-col shrink-0 h-screen sticky top-0 overflow-hidden"
         style={{
-          height: 64,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 16px',
-          borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
+          background: 'var(--bg-surface)',
+          borderRight: '1px solid var(--border)',
         }}
       >
-        <AnimatePresence>
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.15 }}
-              style={{ overflow: 'hidden' }}
-            >
-              <img
-                src="/riyaasat-logo.svg"
-                alt="Riyaasat"
-                style={{
-                  height: 36,
-                  width: 'auto',
-                  objectFit: 'contain',
-                  display: 'block',
-                  filter: isDark ? 'brightness(0) invert(1)' : 'none',
-                }}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <button
-          onClick={() => setCollapsed(!collapsed)}
+        {/* Logo area */}
+        <div
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: 6,
+            height: 64,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--bg-card-hover)',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--text-muted)',
+            justifyContent: 'space-between',
+            padding: '0 16px',
+            borderBottom: '1px solid var(--border)',
             flexShrink: 0,
-            transition: 'background 0.15s ease, color 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--accent-glow)'
-            e.currentTarget.style.color = 'var(--accent)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'var(--bg-card-hover)'
-            e.currentTarget.style.color = 'var(--text-muted)'
           }}
         >
-          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
-      </div>
-
-      {/* Nav items */}
-      <nav
-        style={{
-          flex: 1,
-          padding: '12px 8px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-        }}
-      >
-        {navItems.map(({ to, icon: Icon, label, id }) => (
-          <NavLink
-            key={to}
-            to={to}
-            id={id}
-            title={collapsed ? label : undefined}
-            style={({ isActive }) => ({
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.div
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -8 }}
+                transition={{ duration: 0.15 }}
+                style={{ overflow: 'hidden' }}
+              >
+                {logoImg}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
-              height: 40,
-              padding: '0 12px',
-              borderRadius: 8,
-              textDecoration: 'none',
-              fontSize: 13,
-              fontWeight: 500,
+              justifyContent: 'center',
+              background: 'var(--bg-card-hover)',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-muted)',
+              flexShrink: 0,
               transition: 'background 0.15s ease, color 0.15s ease',
-              boxShadow: isActive ? 'inset 3px 0 0 var(--accent)' : 'none',
-              background: isActive ? 'var(--accent-glow)' : 'transparent',
-              color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-            })}
+            }}
             onMouseEnter={(e) => {
-              if (!e.currentTarget.classList.contains('active')) {
-                e.currentTarget.style.background = 'var(--bg-card-hover)'
-              }
+              e.currentTarget.style.background = 'var(--accent-glow)'
+              e.currentTarget.style.color = 'var(--accent)'
             }}
             onMouseLeave={(e) => {
-              if (!e.currentTarget.getAttribute('aria-current')) {
-                e.currentTarget.style.background = e.currentTarget.style.background.includes('accent')
-                  ? 'var(--accent-glow)' : 'transparent'
-              }
+              e.currentTarget.style.background = 'var(--bg-card-hover)'
+              e.currentTarget.style.color = 'var(--text-muted)'
             }}
           >
-            <Icon size={18} style={{ flexShrink: 0 }} />
-            <AnimatePresence>
-              {!collapsed && (
-                <motion.span
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 'auto' }}
-                  exit={{ opacity: 0, width: 0 }}
-                  transition={{ duration: 0.15 }}
-                  style={{ overflow: 'hidden' }}
-                >
-                  {label}
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </NavLink>
-        ))}
-      </nav>
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          </button>
+        </div>
 
-      {/* Version */}
-      <div
-        style={{
-          padding: '12px 16px',
-          borderTop: '1px solid var(--border)',
-          flexShrink: 0,
-        }}
-      >
-        <AnimatePresence>
-          {!collapsed && (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              style={{ fontSize: 10, color: 'var(--text-muted)' }}
+        {/* Nav items */}
+        <nav
+          style={{
+            flex: 1,
+            padding: '12px 8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+          }}
+        >
+          <NavItems collapsed={collapsed} />
+        </nav>
+
+        {/* Version */}
+        <div
+          style={{
+            padding: '12px 16px',
+            borderTop: '1px solid var(--border)',
+            flexShrink: 0,
+          }}
+        >
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{ fontSize: 10, color: 'var(--text-muted)' }}
+              >
+                v1.0.0
+              </motion.p>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.aside>
+
+      {/* Mobile sidebar overlay */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.aside
+            initial={{ x: -260 }}
+            animate={{ x: 0 }}
+            exit={{ x: -260 }}
+            transition={{ duration: 0.22, ease: 'easeInOut' }}
+            className="md:hidden"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: 260,
+              zIndex: 100,
+              background: 'var(--bg-surface)',
+              borderRight: '1px solid var(--border)',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Logo + close */}
+            <div
+              style={{
+                height: 64,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0 16px',
+                borderBottom: '1px solid var(--border)',
+                flexShrink: 0,
+              }}
             >
-              v1.0.0
-            </motion.p>
-          )}
-        </AnimatePresence>
-      </div>
-    </motion.aside>
+              {logoImg}
+              <button
+                onClick={onMobileClose}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'var(--bg-card-hover)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  flexShrink: 0,
+                }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Nav items */}
+            <nav
+              style={{
+                flex: 1,
+                padding: '12px 8px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                overflowY: 'auto',
+              }}
+            >
+              <NavItems collapsed={false} onItemClick={onMobileClose} />
+            </nav>
+
+            {/* Version */}
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+              <p style={{ fontSize: 10, color: 'var(--text-muted)' }}>v1.0.0</p>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+    </>
   )
 }

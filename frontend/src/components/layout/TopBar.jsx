@@ -1,4 +1,4 @@
-import { Palette } from 'lucide-react'
+import { Palette, Menu } from 'lucide-react'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import useAppStore from '../../store/useAppStore'
@@ -228,7 +228,7 @@ function YearDropdown() {
   )
 }
 
-export default function TopBar({ title }) {
+export default function TopBar({ title, onMenuClick }) {
   const period = useAppStore((s) => s.period)
   const setPeriod = useAppStore((s) => s.setPeriod)
 
@@ -248,6 +248,27 @@ export default function TopBar({ title }) {
         zIndex: 30,
       }}
     >
+      {/* Hamburger — mobile only */}
+      <button
+        className="md:hidden"
+        onClick={onMenuClick}
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          border: '1px solid var(--border)',
+          background: 'var(--bg-card)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          color: 'var(--text-secondary)',
+          flexShrink: 0,
+        }}
+      >
+        <Menu size={16} />
+      </button>
+
       {/* Page title */}
       <span
         style={{
@@ -255,7 +276,7 @@ export default function TopBar({ title }) {
           fontWeight: 600,
           color: 'var(--text-primary)',
           flex: '0 0 auto',
-          minWidth: 120,
+          minWidth: 0,
         }}
       >
         {title}

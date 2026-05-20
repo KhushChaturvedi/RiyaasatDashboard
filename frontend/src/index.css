@@ -42,6 +42,10 @@
   padding: 0;
 }
 
+img, svg {
+  max-width: 100%;
+}
+
 html {
   font-size: 14px;
   height: 100%;
