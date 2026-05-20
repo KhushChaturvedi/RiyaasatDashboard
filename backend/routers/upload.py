@@ -100,30 +100,64 @@ def upload_dump(file: UploadFile = File(...)):
 
 
 @router.post("/daily", response_model=APIResponse)
-def upload_daily(file: UploadFile = File(...)):
+async def upload_daily(file: UploadFile = File(...)):
     try:
-        if not file.filename.endswith((".xlsx", ".xls")):
+        if not file.filename.lower().endswith((".xlsx", ".xls")):
             return APIResponse(success=False, error="Only .xlsx or .xls files are accepted.")
 
-        content = file.file.read()
-        saved_mapping = _load_saved_mapping()
-        df, mapping, unresolved = read_and_map_excel(content, saved_mapping)
-        processed = process_dataframe(df, mapping)
+        contents = await file.read()
+        file_name = file.filename
 
-        records = prepare_records(processed)
-        inserted = _insert_in_batches(records)
+        sb = get_supabase()
 
-        _save_mapping(mapping)
+        # Get saved mapping from Supabase
+        saved_mapping = None
+        try:
+            resp = sb.table("column_mapping").select("mapping") \
+                .order("updated_at", desc=True).limit(1).execute()
+            if resp.data:
+                saved_mapping = resp.data[0]["mapping"]
+        except Exception:
+            pass
 
-        date_min = processed["doc_time"].min() if "doc_time" in processed.columns and not processed["doc_time"].dropna().empty else None
-        date_max = processed["doc_time"].max() if "doc_time" in processed.columns and not processed["doc_time"].dropna().empty else None
+        df, mapping, unresolved = read_and_map_excel(contents, saved_mapping)
+        df = process_dataframe(df, mapping)
+        records = prepare_records(df)
+        total = len(records)
 
-        _log_upload(file.filename, "daily", inserted, str(date_min), str(date_max))
+        # Insert in batches of 200 — no deletion for daily updates
+        inserted = 0
+        batch_size = 200
+        for i in range(0, total, batch_size):
+            batch = records[i:i + batch_size]
+            sb.table("sales_data").insert(batch).execute()
+            inserted += len(batch)
+
+        # Get date range
+        date_start = None
+        date_end = None
+        if "doc_time" in df.columns:
+            dates = pd.to_datetime(df["doc_time"], errors="coerce").dropna()
+            if len(dates) > 0:
+                date_start = dates.min().date().isoformat()
+                date_end = dates.max().date().isoformat()
+
+        # Save upload log
+        try:
+            sb.table("upload_log").insert({
+                "file_name": file_name,
+                "file_type": "daily",
+                "row_count": inserted,
+                "date_range_start": date_start,
+                "date_range_end": date_end,
+            }).execute()
+        except Exception:
+            pass
 
         return APIResponse(success=True, data={
             "inserted": inserted,
-            "mapping": mapping,
-            "unresolved_fields": unresolved,
+            "total_in_file": total,
+            "date_range": {"start": date_start, "end": date_end},
         })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -193,13 +227,15 @@ def upload_status():
 
         # Footfall data
         ff_count = sb.table("footfall_data").select("id", count="exact").execute().count or 0
-        ff_rows = sb.table("footfall_data").select("branch_nm,ff_date,inserted_at").order("inserted_at", desc=True).limit(500).execute().data or []
-        ff_branches = sorted({r["branch_nm"] for r in ff_rows if r.get("branch_nm")})
-        ff_dates = [r["ff_date"] for r in ff_rows if r.get("ff_date")]
+        # Fetch all branch names (entire table is small)
+        ff_all = sb.table("footfall_data").select("branch_nm,ff_date,inserted_at").limit(100000).execute().data or []
+        ff_branches = sorted({r["branch_nm"] for r in ff_all if r.get("branch_nm")})
+        ff_dates = [r["ff_date"] for r in ff_all if r.get("ff_date")]
+        ff_last = max((r["inserted_at"] for r in ff_all if r.get("inserted_at")), default=None)
         footfall = {
             "total_rows": ff_count,
             "branches": ff_branches,
-            "last_uploaded": ff_rows[0]["inserted_at"] if ff_rows else None,
+            "last_uploaded": ff_last,
             "date_range": {"start": min(ff_dates), "end": max(ff_dates)} if ff_dates else None,
         }
 
@@ -449,10 +485,10 @@ def footfall_status():
             return APIResponse(success=True, data={"total_rows": 0, "branches": [], "last_uploaded": None, "date_range": None})
 
         rows = sb.table("footfall_data").select("branch_nm,ff_date,inserted_at") \
-            .order("inserted_at", desc=True).limit(1000).execute().data or []
+            .limit(100000).execute().data or []
 
         branches = sorted({r["branch_nm"] for r in rows if r.get("branch_nm")})
-        last_uploaded = rows[0]["inserted_at"] if rows else None
+        last_uploaded = max((r["inserted_at"] for r in rows if r.get("inserted_at")), default=None)
         dates = [r["ff_date"] for r in rows if r.get("ff_date")]
         date_range = {"start": min(dates), "end": max(dates)} if dates else None
 

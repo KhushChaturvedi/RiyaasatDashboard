@@ -25,6 +25,10 @@ KNOWN_NAMES: dict[str, str] = {
     "days":       "days",
     "month":      "month",
     "year":       "year",
+    # Aliases for column name variations in daily files
+    "branch":     "branch_nm",
+    "months":     "month",
+    "temp":       "fy",
 }
 
 # All internal field names in a stable order.

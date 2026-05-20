@@ -25,6 +25,13 @@ def get_date_range(period: str, year: int) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
+COLUMN_ALIASES = {
+    "branch": "branch_nm",
+    "months": "month",
+    "temp":   "fy",
+}
+
+
 def read_and_map_excel(file_bytes: bytes, saved_mapping: Optional[dict] = None) -> tuple[pd.DataFrame, dict, list]:
     df = pd.read_excel(BytesIO(file_bytes), engine="openpyxl")
     df.columns = [str(c).strip() for c in df.columns]
@@ -37,6 +44,12 @@ def read_and_map_excel(file_bytes: bytes, saved_mapping: Optional[dict] = None) 
             for i in range(sum(cols == dup))
         ]
     df.columns = cols
+
+    # Pre-normalize column name aliases to standard names before detection
+    df.columns = [
+        COLUMN_ALIASES.get(c.strip().lower(), c.strip())
+        for c in df.columns
+    ]
 
     if saved_mapping:
         mapping = saved_mapping
@@ -60,6 +73,8 @@ def process_dataframe(df: pd.DataFrame, mapping: dict[str, str]) -> pd.DataFrame
     if "doc_time" in df.columns:
         df["doc_time"] = pd.to_datetime(df["doc_time"], errors="coerce")
         df = df.dropna(subset=["doc_time"])
+        # drop epoch/zero dates — any date before 2000 is bad data
+        df = df[df["doc_time"].dt.year >= 2000]
         df["doc_time"] = df["doc_time"].dt.strftime("%Y-%m-%dT%H:%M:%S")
 
     if "amount1" in df.columns:
@@ -83,6 +98,12 @@ def process_dataframe(df: pd.DataFrame, mapping: dict[str, str]) -> pd.DataFrame
     for col in ["month", "year", "days"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    if "month" in df.columns:
+        df["month"] = df["month"].apply(
+            lambda x: str(x).strip().title()
+            if isinstance(x, str) else x
+        )
 
     standard_cols = [
         "fy", "acct_cd", "acct_nm", "qty", "branch_nm", "doc_cd", "pay_type",
