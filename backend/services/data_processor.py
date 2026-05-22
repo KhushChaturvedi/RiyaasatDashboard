@@ -25,56 +25,92 @@ def get_date_range(period: str, year: int) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
-COLUMN_ALIASES = {
-    "branch": "branch_nm",
-    "months": "month",
-    "temp":   "fy",
-}
+def read_and_map_excel(file_bytes: bytes, saved_mapping=None):
+    # Read all sheets, pick the one with most rows
+    xl = pd.ExcelFile(BytesIO(file_bytes))
+    best_df = None
+    best_rows = 0
+    for sheet in xl.sheet_names:
+        try:
+            temp_df = pd.read_excel(
+                BytesIO(file_bytes),
+                sheet_name=sheet,
+                engine="openpyxl"
+            )
+            if len(temp_df) > best_rows:
+                best_rows = len(temp_df)
+                best_df = temp_df
+        except Exception:
+            continue
 
+    df = best_df if best_df is not None else pd.read_excel(
+        BytesIO(file_bytes), engine="openpyxl"
+    )
 
-def read_and_map_excel(file_bytes: bytes, saved_mapping: Optional[dict] = None) -> tuple[pd.DataFrame, dict, list]:
-    df = pd.read_excel(BytesIO(file_bytes), engine="openpyxl")
+    # Strip column name whitespace
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Deduplicate column names by appending _1, _2 etc to duplicates
+    # Deduplicate column names
     cols = pd.Series(df.columns)
     for dup in cols[cols.duplicated()].unique():
-        cols[cols[cols == dup].index.values.tolist()] = [
-            dup if i == 0 else f"{dup}_{i}"
-            for i in range(sum(cols == dup))
-        ]
+        indices = cols[cols == dup].index.tolist()
+        for i, idx in enumerate(indices):
+            if i > 0:
+                cols[idx] = f"{dup}_{i}"
     df.columns = cols
 
-    # Pre-normalize column name aliases to standard names before detection
-    df.columns = [
-        COLUMN_ALIASES.get(c.strip().lower(), c.strip())
-        for c in df.columns
-    ]
+    # Hardcoded column selection — only keep required columns
+    REQUIRED_COLUMNS = {
+        "qty":        "qty",
+        "branch_nm":  "branch_nm",
+        "doc_cd":     "doc_cd",
+        "brand_desc": "brand_desc",
+        "dept_desc":  "dept_desc",
+        "style_desc": "style_desc",
+        "sales_rep":  "sales_rep",
+        "doc_dt":     "doc_time",   # new raw format uses doc_dt
+        "doc_time":   "doc_time",   # fallback for old format
+        "amount1":    "amount1",
+    }
 
-    if saved_mapping:
-        mapping = saved_mapping
-        unresolved: list[str] = []
-    else:
-        mapping, unresolved = detect_columns(df)
+    rename_dict = {}
+    for col in df.columns:
+        col_lower = col.strip().lower()
+        if col_lower in REQUIRED_COLUMNS:
+            internal_name = REQUIRED_COLUMNS[col_lower]
+            rename_dict[col] = internal_name
+
+    df = df.rename(columns=rename_dict)
+
+    KEEP_COLS = ["qty", "branch_nm", "doc_cd", "brand_desc",
+                 "dept_desc", "style_desc", "sales_rep",
+                 "doc_time", "amount1"]
+    df = df[[c for c in KEEP_COLS if c in df.columns]]
+
+    mapping = {internal: internal for internal in df.columns}
+    unresolved = [c for c in KEEP_COLS if c not in df.columns]
 
     return df, mapping, unresolved
 
 
-def process_dataframe(df: pd.DataFrame, mapping: dict[str, str]) -> pd.DataFrame:
-    reverse_map = {v: k for k, v in mapping.items()}
-    rename_dict = {v: k for k, v in mapping.items() if v in df.columns}
-    df = df.rename(columns=rename_dict)
-
-    required = ["doc_time", "amount1", "qty", "branch_nm", "dept_desc"]
-    for col in required:
-        if col not in df.columns:
-            df[col] = None
-
+def process_dataframe(df: pd.DataFrame, mapping: dict) -> pd.DataFrame:
     if "doc_time" in df.columns:
         df["doc_time"] = pd.to_datetime(df["doc_time"], errors="coerce")
         df = df.dropna(subset=["doc_time"])
-        # drop epoch/zero dates — any date before 2000 is bad data
+        # Drop epoch/zero dates — any date before 2000 is bad data
         df = df[df["doc_time"].dt.year >= 2000]
+
+        df["year"]  = df["doc_time"].dt.year
+        df["month"] = df["doc_time"].dt.strftime("%b")
+        df["days"]  = df["doc_time"].dt.day
+
+        def get_fy(dt):
+            if dt.month >= 4:
+                return f"{dt.year}-{str(dt.year + 1)[2:]}"
+            else:
+                return f"{dt.year - 1}-{str(dt.year)[2:]}"
+
+        df["fy"] = df["doc_time"].apply(get_fy)
         df["doc_time"] = df["doc_time"].dt.strftime("%Y-%m-%dT%H:%M:%S")
 
     if "amount1" in df.columns:
@@ -85,53 +121,44 @@ def process_dataframe(df: pd.DataFrame, mapping: dict[str, str]) -> pd.DataFrame
 
     if "dept_desc" in df.columns:
         df["category"] = df["dept_desc"].apply(
-            lambda x: "Bride" if isinstance(x, str) and x.strip().startswith("L ") else "Groom"
+            lambda x: "Bride"
+            if isinstance(x, str) and x.strip().startswith("L ")
+            else "Groom"
         )
     else:
         df["category"] = "Groom"
 
     if "sales_rep" in df.columns:
         df["sales_rep"] = df["sales_rep"].apply(
-            lambda x: x.strip().title() if isinstance(x, str) and x.strip() else None
+            lambda x: x.strip().title()
+            if isinstance(x, str) and x.strip()
+            else None
         )
 
-    for col in ["month", "year", "days"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    if "month" in df.columns:
-        df["month"] = df["month"].apply(
-            lambda x: str(x).strip().title()
-            if isinstance(x, str) else x
-        )
-
-    standard_cols = [
-        "fy", "acct_cd", "acct_nm", "qty", "branch_nm", "doc_cd", "pay_type",
-        "brand_desc", "dept_desc", "size_desc", "style_desc", "sales_rep",
-        "doc_time", "amount1", "days", "month", "year", "category",
+    supabase_cols = [
+        "fy", "acct_cd", "acct_nm", "qty", "branch_nm",
+        "doc_cd", "pay_type", "brand_desc", "dept_desc",
+        "size_desc", "style_desc", "sales_rep", "doc_time",
+        "amount1", "days", "month", "year", "category",
     ]
-    for col in standard_cols:
+    for col in supabase_cols:
         if col not in df.columns:
             df[col] = None
 
-    df = df[standard_cols]
-    return df
+    return df[supabase_cols]
 
 
 def prepare_records(df: pd.DataFrame) -> list[dict]:
     df = df.copy()
 
-    # Replace NaN and NaT with None before any further processing
     df = df.replace({float("nan"): None})
     df = df.where(df.notna(), None)
 
-    # Convert all datetime columns to ISO string format for JSON serialization
     import pandas.api.types as ptypes
     datetime_cols = [col for col in df.columns if ptypes.is_datetime64_any_dtype(df[col])]
     for col in datetime_cols:
         df[col] = df[col].dt.strftime("%Y-%m-%dT%H:%M:%S").where(df[col].notna(), None)
 
-    # Convert any remaining Timestamp objects to strings
     def _serialize(val):
         if isinstance(val, pd.Timestamp):
             return val.isoformat()

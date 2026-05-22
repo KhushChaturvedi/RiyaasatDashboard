@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -75,17 +76,34 @@ function NavItems({ collapsed, onItemClick }) {
 export default function Sidebar({ mobileOpen, onMobileClose }) {
   const collapsed = useAppStore((s) => s.sidebarCollapsed)
   const setCollapsed = useAppStore((s) => s.setSidebarCollapsed)
-  const theme = useAppStore((s) => s.theme)
-  const isDark = ['dark', 'navy', 'red', 'green', 'grey'].includes(theme)
+
+  const [isDark, setIsDark] = useState(false)
+
+  useEffect(() => {
+    const checkTheme = () => {
+      const theme = document.documentElement.getAttribute('data-theme')
+      setIsDark(['dark', 'navy', 'red', 'green', 'grey'].includes(theme))
+    }
+    checkTheme()
+    const observer = new MutationObserver(checkTheme)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
+    return () => observer.disconnect()
+  }, [])
 
   const logoImg = (
     <img
-      src="/riyaasat-logo.svg"
+      src="/riyaasat-logo.png"
       alt="Riyaasat"
       style={{
-        height: 36,
+        height: collapsed ? 28 : 40,
         width: 'auto',
+        maxWidth: collapsed ? 40 : 160,
         objectFit: 'contain',
+        objectPosition: 'left center',
+        transition: 'all 0.2s ease',
         display: 'block',
         filter: isDark ? 'brightness(0) invert(1)' : 'none',
       }}
@@ -111,24 +129,12 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0 16px',
+            padding: collapsed ? '0 8px' : '0 8px 0 16px',
             borderBottom: '1px solid var(--border)',
             flexShrink: 0,
           }}
         >
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -8 }}
-                transition={{ duration: 0.15 }}
-                style={{ overflow: 'hidden' }}
-              >
-                {logoImg}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {logoImg}
           <button
             onClick={() => setCollapsed(!collapsed)}
             style={{
@@ -225,12 +231,24 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '0 16px',
+                padding: '0 8px 0 16px',
                 borderBottom: '1px solid var(--border)',
                 flexShrink: 0,
               }}
             >
-              {logoImg}
+              <img
+                src="/riyaasat-logo.png"
+                alt="Riyaasat"
+                style={{
+                  height: 40,
+                  width: 'auto',
+                  maxWidth: 160,
+                  objectFit: 'contain',
+                  objectPosition: 'left center',
+                  display: 'block',
+                  filter: isDark ? 'brightness(0) invert(1)' : 'none',
+                }}
+              />
               <button
                 onClick={onMobileClose}
                 style={{
