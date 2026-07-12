@@ -318,6 +318,8 @@ export default function DataManagement() {
   // Delete modals
   const [deleteModal, setDeleteModal] = useState(null) // 'sales' | 'target' | 'footfall'
   const [deleting, setDeleting] = useState(false)
+  const [deleteDailyModal, setDeleteDailyModal] = useState(false)
+  const [deletingDaily, setDeletingDaily] = useState(false)
 
   const loadStatus = useCallback(async () => {
     try {
@@ -328,6 +330,24 @@ export default function DataManagement() {
   }, [])
 
   useEffect(() => { loadStatus() }, [loadStatus])
+
+  const handleDeleteDaily = async () => {
+    setDeletingDaily(true)
+    try {
+      const res = await uploadAPI.resetDaily()
+      if (res.success) {
+        toast.success('Daily updates deleted successfully')
+        loadStatus()
+      } else {
+        toast.error(res.error || 'Failed to delete daily updates')
+      }
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setDeletingDaily(false)
+      setDeleteDailyModal(false)
+    }
+  }
 
   const handleDelete = async () => {
     if (!deleteModal) return
@@ -474,6 +494,25 @@ export default function DataManagement() {
             </p>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {/* Orange: less destructive — deletes only daily rows */}
+              <button
+                onClick={() => setDeleteDailyModal(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 14px', borderRadius: 8,
+                  border: '1px solid rgba(245,158,11,0.35)',
+                  background: 'transparent', color: 'var(--warning)',
+                  fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                  fontFamily: 'inherit', transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(245,158,11,0.08)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <Trash2 size={13} />
+                Delete Daily Updates Only
+              </button>
+
+              {/* Red: full deletes */}
               {[
                 { key: 'sales', label: 'Delete All Sales Data', icon: Database },
                 { key: 'target', label: 'Delete All Target Data', icon: Target },
@@ -502,6 +541,83 @@ export default function DataManagement() {
         </motion.div>
 
       </div>
+
+      {/* Daily delete confirm modal */}
+      <AnimatePresence>
+        {deleteDailyModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 200,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 16,
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.15 }}
+              style={{
+                background: 'var(--bg-surface)',
+                borderRadius: 12,
+                padding: 24,
+                maxWidth: 420,
+                width: '100%',
+                border: '1px solid var(--border)',
+                boxShadow: 'var(--shadow-lg)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <AlertTriangle size={18} style={{ color: 'var(--warning)', flexShrink: 0 }} />
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Delete Daily Updates Only
+                </h3>
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
+                This will delete all daily sales updates added after the master dump file.
+                The original dump data will be kept intact. This cannot be undone.
+              </p>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button
+                  className="btn-ghost"
+                  onClick={() => setDeleteDailyModal(false)}
+                  disabled={deletingDaily}
+                  style={{ opacity: deletingDaily ? 0.5 : 1 }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteDaily}
+                  disabled={deletingDaily}
+                  style={{
+                    background: 'var(--warning)',
+                    color: '#fff',
+                    borderRadius: 8,
+                    padding: '8px 16px',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: deletingDaily ? 'not-allowed' : 'pointer',
+                    border: 'none',
+                    fontFamily: 'inherit',
+                    opacity: deletingDaily ? 0.6 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Trash2 size={13} />
+                  {deletingDaily ? 'Deleting…' : 'Delete Daily Updates'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Delete confirm modal */}
       <ConfirmModal

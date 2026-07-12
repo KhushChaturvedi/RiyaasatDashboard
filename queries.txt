@@ -1,0 +1,6 @@
+D:\RiyaasatDashboard>cd backend
+
+D:\RiyaasatDashboard\backend>venv\Scripts\activate
+
+(venv) D:\RiyaasatDashboard\backend>uvicorn main:app --reload --port 8000
+

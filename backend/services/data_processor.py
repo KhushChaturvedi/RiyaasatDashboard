@@ -1,5 +1,5 @@
 import calendar
-from datetime import date, timedelta
+from datetime import date
 from io import BytesIO
 from typing import Optional
 import pandas as pd
@@ -9,17 +9,16 @@ from services.column_detector import detect_columns
 
 def get_date_range(period: str, year: int) -> tuple[str, str]:
     today = date.today()
-    yesterday = today - timedelta(days=1)
 
     if period == "mtd":
         start = date(year, today.month, 1)
-        end_day = min(yesterday.day, calendar.monthrange(year, today.month)[1])
+        end_day = min(today.day, calendar.monthrange(year, today.month)[1])
         end = date(year, today.month, end_day)
     else:
         fy_start_yr = year if today.month >= 4 else year - 1
         start = date(fy_start_yr, 4, 1)
-        end_month = yesterday.month
-        end_day = min(yesterday.day, calendar.monthrange(year, end_month)[1])
+        end_month = today.month
+        end_day = min(today.day, calendar.monthrange(year, end_month)[1])
         end = date(year, end_month, end_day)
 
     return start.isoformat(), end.isoformat()

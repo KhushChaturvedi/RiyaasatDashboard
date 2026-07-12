@@ -80,6 +80,10 @@ def upload_dump(file: UploadFile = File(...)):
         df, mapping, unresolved = read_and_map_excel(content, saved_mapping)
         processed = process_dataframe(df, mapping)
 
+        # Dump replaces all existing sales data — clear the table first
+        sb = get_supabase()
+        _batch_delete_table(sb, "sales_data")
+
         records = prepare_records(processed)
         inserted = _insert_in_batches(records)
 
@@ -125,15 +129,7 @@ async def upload_daily(file: UploadFile = File(...)):
         records = prepare_records(df)
         total = len(records)
 
-        # Insert in batches of 200 — no deletion for daily updates
-        inserted = 0
-        batch_size = 200
-        for i in range(0, total, batch_size):
-            batch = records[i:i + batch_size]
-            sb.table("sales_data").insert(batch).execute()
-            inserted += len(batch)
-
-        # Get date range
+        # Get date range covered by this file
         date_start = None
         date_end = None
         if "doc_time" in df.columns:
@@ -141,6 +137,24 @@ async def upload_daily(file: UploadFile = File(...)):
             if len(dates) > 0:
                 date_start = dates.min().date().isoformat()
                 date_end = dates.max().date().isoformat()
+
+        # Dedup protection: clear any existing rows in this file's date range
+        # before inserting, so re-uploading the same/overlapping file never
+        # double-counts sales.
+        if date_start and date_end:
+            sb.table("sales_data") \
+                .delete() \
+                .gte("doc_time", date_start) \
+                .lte("doc_time", date_end + "T23:59:59") \
+                .execute()
+
+        # Insert in batches of 200
+        inserted = 0
+        batch_size = 200
+        for i in range(0, total, batch_size):
+            batch = records[i:i + batch_size]
+            sb.table("sales_data").insert(batch).execute()
+            inserted += len(batch)
 
         # Save upload log
         try:

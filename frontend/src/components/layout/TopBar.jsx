@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import useAppStore from '../../store/useAppStore'
 import { themes } from '../../themes/themes'
 import { getComparisonYears, getCurrentYear } from '../../utils/dateUtils'
+import useWindowWidth from '../../hooks/useWindowWidth'
 
 const YEAR_OPTIONS = [
   { label: 'Current only', count: 0 },
@@ -13,7 +14,7 @@ const YEAR_OPTIONS = [
   { label: '+ 5 years', count: 5 },
 ]
 
-function SyncDot() {
+function SyncDot({ showLabel = true }) {
   const syncStatus = useAppStore((s) => s.syncStatus)
 
   const colors = {
@@ -33,12 +34,15 @@ function SyncDot() {
           borderRadius: '50%',
           background: color,
           display: 'inline-block',
+          flexShrink: 0,
           animation: syncStatus === 'synced' ? 'pulse-dot 2.5s ease-in-out infinite' : 'none',
         }}
       />
-      <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
-        {labels[syncStatus]}
-      </span>
+      {showLabel && (
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
+          {labels[syncStatus]}
+        </span>
+      )}
     </div>
   )
 }
@@ -140,7 +144,7 @@ function ThemePicker() {
   )
 }
 
-function YearDropdown() {
+function YearDropdown({ compact = false }) {
   const selectedYears = useAppStore((s) => s.selectedYears)
   const setSelectedYears = useAppStore((s) => s.setSelectedYears)
   const [open, setOpen] = useState(false)
@@ -153,12 +157,12 @@ function YearDropdown() {
       <button
         onClick={() => setOpen((o) => !o)}
         style={{
-          height: 30,
-          padding: '0 10px',
+          height: compact ? 26 : 30,
+          padding: compact ? '0 8px' : '0 10px',
           borderRadius: 6,
           border: '1px solid var(--border)',
           background: 'var(--bg-card)',
-          fontSize: 12,
+          fontSize: compact ? 11 : 12,
           fontWeight: 500,
           color: 'var(--text-secondary)',
           cursor: 'pointer',
@@ -167,6 +171,9 @@ function YearDropdown() {
           gap: 4,
           transition: 'all 0.15s ease',
           fontFamily: 'inherit',
+          maxWidth: compact ? 130 : 'none',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
         }}
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)' }}
@@ -231,7 +238,124 @@ function YearDropdown() {
 export default function TopBar({ title, onMenuClick }) {
   const period = useAppStore((s) => s.period)
   const setPeriod = useAppStore((s) => s.setPeriod)
+  const theme = useAppStore((s) => s.theme)
+  const width = useWindowWidth()
+  const isMobile = width < 768
+  const isDark = ['dark', 'navy', 'red', 'green', 'grey'].includes(theme)
 
+  if (isMobile) {
+    return (
+      <header
+        style={{
+          background: 'var(--bg-surface)',
+          borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+          position: 'sticky',
+          top: 0,
+          zIndex: 30,
+        }}
+      >
+        {/* Row 1: hamburger | title | sync dot */}
+        <div
+          style={{
+            height: 44,
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 12px',
+            gap: 10,
+          }}
+        >
+          <button
+            onClick={onMenuClick}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-card)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              flexShrink: 0,
+            }}
+          >
+            <Menu size={16} />
+          </button>
+
+          <span
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              fontSize: 14,
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {title}
+          </span>
+
+          <SyncDot showLabel={false} />
+        </div>
+
+        {/* Row 2: MTD/YTD | year selector */}
+        <div
+          style={{
+            height: 36,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 12px',
+            gap: 8,
+            background: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)',
+          }}
+        >
+          <div
+            id="topbar-period-toggle"
+            style={{
+              display: 'inline-flex',
+              background: 'var(--bg-base)',
+              borderRadius: 6,
+              padding: 2,
+              gap: 2,
+            }}
+          >
+            {['mtd', 'ytd'].map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                style={{
+                  width: 60,
+                  height: 26,
+                  borderRadius: 4,
+                  border: 'none',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  transition: 'all 0.15s ease',
+                  background: period === p ? 'var(--accent)' : 'transparent',
+                  color: period === p ? '#fff' : 'var(--text-secondary)',
+                }}
+                onMouseEnter={(e) => { if (period !== p) e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={(e) => { if (period !== p) e.currentTarget.style.color = 'var(--text-secondary)' }}
+              >
+                {p.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          <YearDropdown compact />
+        </div>
+      </header>
+    )
+  }
+
+  // Desktop layout — unchanged
   return (
     <header
       style={{
@@ -248,27 +372,6 @@ export default function TopBar({ title, onMenuClick }) {
         zIndex: 30,
       }}
     >
-      {/* Hamburger — mobile only */}
-      <button
-        className="md:hidden"
-        onClick={onMenuClick}
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 8,
-          border: '1px solid var(--border)',
-          background: 'var(--bg-card)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          color: 'var(--text-secondary)',
-          flexShrink: 0,
-        }}
-      >
-        <Menu size={16} />
-      </button>
-
       {/* Page title */}
       <span
         style={{

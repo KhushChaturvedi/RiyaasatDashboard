@@ -59,6 +59,7 @@ export const uploadAPI = {
     }).then((r) => r.data)
   },
   resetSales: () => api.delete('/api/upload/reset').then((r) => r.data),
+  resetDaily: () => api.delete('/api/upload/reset-daily').then((r) => r.data),
   resetTarget: () => api.delete('/api/upload/reset-target').then((r) => r.data),
   resetFootfall: () => api.delete('/api/upload/reset-footfall').then((r) => r.data),
   getStatus: () => api.get('/api/upload/status').then((r) => r.data),

@@ -34,6 +34,8 @@ const useAppStore = create(
       partialize: (state) => ({
         theme: state.theme,
         sidebarCollapsed: state.sidebarCollapsed,
+        period: state.period,
+        selectedYears: state.selectedYears,
       }),
     }
   )
