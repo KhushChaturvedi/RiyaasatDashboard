@@ -9,7 +9,7 @@ import pandas as pd
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
-BATCH_SIZE = 500
+BATCH_SIZE = 2000
 
 
 def _load_saved_mapping() -> dict | None:
@@ -59,14 +59,9 @@ def _insert_in_batches(records: list[dict]) -> int:
 
 
 def _batch_delete_table(sb, table: str):
-    """Delete all rows from a table in batches of 1000 to avoid statement timeout."""
-    while True:
-        resp = sb.table(table).select("id").limit(1000).execute()
-        rows = resp.data or []
-        if not rows:
-            break
-        ids = [r["id"] for r in rows]
-        sb.table(table).delete().in_("id", ids).execute()
+    """Delete all rows from a table in a single request instead of paginating
+    (id is always > 0, so this matches every row in one call)."""
+    sb.table(table).delete().gt("id", 0).execute()
 
 
 @router.post("/dump", response_model=APIResponse)
