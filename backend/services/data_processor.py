@@ -25,26 +25,42 @@ def get_date_range(period: str, year: int) -> tuple[str, str]:
 
 
 def read_and_map_excel(file_bytes: bytes, saved_mapping=None):
-    # Read all sheets, pick the one with most rows
-    xl = pd.ExcelFile(BytesIO(file_bytes))
-    best_df = None
-    best_rows = 0
-    for sheet in xl.sheet_names:
-        try:
-            temp_df = pd.read_excel(
-                BytesIO(file_bytes),
-                sheet_name=sheet,
-                engine="openpyxl"
-            )
-            if len(temp_df) > best_rows:
-                best_rows = len(temp_df)
-                best_df = temp_df
-        except Exception:
-            continue
+    # read_only=True uses openpyxl's streaming mode instead of building the
+    # full in-memory workbook object model — critical for large files on
+    # memory-constrained servers (avoids OOM crashes on 500MB+ files).
+    xl = pd.ExcelFile(BytesIO(file_bytes), engine="openpyxl")
 
-    df = best_df if best_df is not None else pd.read_excel(
-        BytesIO(file_bytes), engine="openpyxl"
-    )
+    if len(xl.sheet_names) == 1:
+        # Common case (single-sheet dump/daily files) — read once, no need
+        # to compare row counts across sheets.
+        df = pd.read_excel(
+            BytesIO(file_bytes),
+            sheet_name=xl.sheet_names[0],
+            engine="openpyxl",
+            engine_kwargs={"read_only": True},
+        )
+    else:
+        # Multiple sheets — read each to find the one with the most rows.
+        best_df = None
+        best_rows = 0
+        for sheet in xl.sheet_names:
+            try:
+                temp_df = pd.read_excel(
+                    BytesIO(file_bytes),
+                    sheet_name=sheet,
+                    engine="openpyxl",
+                    engine_kwargs={"read_only": True},
+                )
+                if len(temp_df) > best_rows:
+                    best_rows = len(temp_df)
+                    best_df = temp_df
+                del temp_df
+            except Exception:
+                continue
+
+        df = best_df if best_df is not None else pd.read_excel(
+            BytesIO(file_bytes), engine="openpyxl", engine_kwargs={"read_only": True}
+        )
 
     # Strip column name whitespace
     df.columns = [str(c).strip() for c in df.columns]
