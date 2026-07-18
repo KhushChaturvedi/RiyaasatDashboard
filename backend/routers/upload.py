@@ -1,4 +1,5 @@
 import traceback
+import gc
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from models.schemas import APIResponse
 from services.supabase_client import get_supabase
@@ -9,7 +10,7 @@ import pandas as pd
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
-BATCH_SIZE = 2000
+BATCH_SIZE = 1000
 
 
 def _load_saved_mapping() -> dict | None:
@@ -70,24 +71,55 @@ def upload_dump(file: UploadFile = File(...)):
         if not file.filename.endswith((".xlsx", ".xls")):
             return APIResponse(success=False, error="Only .xlsx or .xls files are accepted.")
 
+        print(f"[DUMP] Starting upload: {file.filename}", flush=True)
         content = file.file.read()
+        print(f"[DUMP] File read: {len(content)} bytes", flush=True)
+
         saved_mapping = _load_saved_mapping()
         df, mapping, unresolved = read_and_map_excel(content, saved_mapping)
+        del content
+        print(f"[DUMP] Excel parsed: {len(df)} rows", flush=True)
+
         processed = process_dataframe(df, mapping)
+        del df
+        print(f"[DUMP] Processed: {len(processed)} rows", flush=True)
 
-        # Dump replaces all existing sales data — clear the table first
         sb = get_supabase()
+        print("[DUMP] Deleting old sales_data...", flush=True)
         _batch_delete_table(sb, "sales_data")
+        print("[DUMP] Old data deleted successfully", flush=True)
 
-        records = prepare_records(processed)
-        inserted = _insert_in_batches(records)
+        total_rows = len(processed)
+        total_batches = (total_rows + BATCH_SIZE - 1) // BATCH_SIZE
+        print(f"[DUMP] Inserting {total_rows} rows in {total_batches} chunks of {BATCH_SIZE}...", flush=True)
 
-        _save_mapping(mapping)
+        inserted = 0
+        for batch_num, i in enumerate(range(0, total_rows, BATCH_SIZE), start=1):
+            # Slice + convert ONLY this chunk to records — never build the
+            # full records list for all rows in memory at once.
+            chunk_df = processed.iloc[i:i + BATCH_SIZE]
+            chunk_records = prepare_records(chunk_df)
+            try:
+                sb.table("sales_data").insert(chunk_records).execute()
+                inserted += len(chunk_records)
+                print(f"[DUMP] Batch {batch_num}/{total_batches} inserted ({inserted}/{total_rows} total)", flush=True)
+            except Exception as batch_err:
+                print(f"[DUMP] FAILED on batch {batch_num}/{total_batches}: {repr(batch_err)}", flush=True)
+                raise
+            del chunk_df, chunk_records
+            gc.collect()
+
+        print(f"[DUMP] All batches inserted: {inserted} rows", flush=True)
 
         date_min = processed[processed["doc_time"].notna()]["doc_time"].min() if "doc_time" in processed.columns and not processed["doc_time"].dropna().empty else None
         date_max = processed[processed["doc_time"].notna()]["doc_time"].max() if "doc_time" in processed.columns and not processed["doc_time"].dropna().empty else None
 
+        del processed
+        gc.collect()
+
+        _save_mapping(mapping)
         _log_upload(file.filename, "dump", inserted, str(date_min), str(date_max))
+        print("[DUMP] Complete.", flush=True)
 
         return APIResponse(success=True, data={
             "inserted": inserted,
@@ -95,6 +127,8 @@ def upload_dump(file: UploadFile = File(...)):
             "unresolved_fields": unresolved,
         })
     except Exception as e:
+        print(f"[DUMP] FATAL ERROR: {repr(e)}", flush=True)
+        print(traceback.format_exc(), flush=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
