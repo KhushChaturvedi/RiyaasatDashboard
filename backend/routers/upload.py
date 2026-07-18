@@ -92,6 +92,8 @@ def upload_dump(file: UploadFile = File(...)):
         total_rows = len(processed)
         total_batches = (total_rows + BATCH_SIZE - 1) // BATCH_SIZE
         print(f"[DUMP] Inserting {total_rows} rows in {total_batches} chunks of {BATCH_SIZE}...", flush=True)
+        print(f"[DUMP] DEBUG branch_nm in processed df, first 5: {processed['branch_nm'].head(5).tolist() if 'branch_nm' in processed.columns else 'COLUMN MISSING'}", flush=True)
+        print(f"[DUMP] DEBUG branch_nm null count: {processed['branch_nm'].isna().sum() if 'branch_nm' in processed.columns else 'N/A'} / {total_rows}", flush=True)
 
         inserted = 0
         for batch_num, i in enumerate(range(0, total_rows, BATCH_SIZE), start=1):
@@ -99,6 +101,8 @@ def upload_dump(file: UploadFile = File(...)):
             # full records list for all rows in memory at once.
             chunk_df = processed.iloc[i:i + BATCH_SIZE]
             chunk_records = prepare_records(chunk_df)
+            if batch_num == 1:
+                print(f"[DUMP] DEBUG first record about to be inserted: {chunk_records[0]}", flush=True)
             try:
                 sb.table("sales_data").insert(chunk_records).execute()
                 inserted += len(chunk_records)
